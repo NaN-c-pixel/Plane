@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Multiverse Flight Control</title>
+<style>
+:root{color-scheme:dark;--cyan:#69e7ff;--green:#83ffc1;--panel:#081522dd}*{box-sizing:border-box}
+body{margin:0;background:#020711;color:#eaf8ff;font:14px/1.4 system-ui,Segoe UI,sans-serif;overflow:hidden}
+canvas{position:fixed;inset:0;width:100%;height:100%;display:block}
+.hud{position:fixed;inset:14px;pointer-events:none;display:grid;grid-template-columns:220px 1fr 220px;grid-template-rows:auto 1fr auto;gap:10px}
+.panel{background:var(--panel);border:1px solid #3c8da777;border-radius:12px;padding:12px;box-shadow:0 0 24px #00bfff18;backdrop-filter:blur(8px);pointer-events:auto}
+h1{font-size:15px;letter-spacing:2px;margin:0 0 8px;color:var(--cyan)}.muted{color:#8daabd;font-size:11px}
+.readout{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #ffffff12;font-variant-numeric:tabular-nums}
+button{background:#102a3a;color:#dffaff;border:1px solid #4b9dbb;border-radius:7px;padding:7px 10px;cursor:pointer;margin:3px}button:hover{background:#17435a}
+#left{grid-column:1;grid-row:1}#right{grid-column:3;grid-row:1}#bottom{grid-column:1/4;grid-row:3;justify-self:center;text-align:center;max-width:650px}
+#map{width:190px;height:125px;display:block;background:#020812;border:1px solid #2e5c72;border-radius:6px}
+#target{color:var(--green)}.big{font-size:22px;color:var(--cyan);font-weight:700}
+@media(max-width:650px){.hud{inset:6px;grid-template-columns:1fr 1fr;grid-template-rows:auto 1fr auto}.panel{padding:8px}#left{grid-column:1}#right{grid-column:2}#bottom{grid-column:1/3}#map{width:125px;height:85px}.hide-small{display:none}}
+</style></head>
+<body><canvas id="space"></canvas>
+<div class="hud">
+<section class="panel" id="left"><h1>✦ FLIGHT SYSTEMS</h1>
+<div class="readout"><span>VELOCITY</span><b id="speed">0.0</b></div><div class="readout"><span>ALTITUDE</span><b id="alt">0</b></div><div class="readout"><span>HEADING</span><b id="heading">000°</b></div><div class="readout"><span>THROTTLE</span><b id="throttle">0%</b></div>
+<p class="muted">W / ↑ thrust · A,D / ←,→ steer<br>Space = boost · M = autopilot</p>
+<button id="auto">AUTOPILOT: OFF</button><button id="zoomIn">ZOOM +</button><button id="zoomOut">ZOOM −</button><button id="reset">RESET VIEW</button></section>
+<section class="panel" id="right"><h1>SECTOR SCANNER</h1><canvas id="map" width="380" height="250"></canvas><p class="muted">12 galaxies · 960 worlds</p><div class="readout"><span>DISCOVERED</span><b id="found">0 / 960</b></div><div class="readout"><span>NAV TARGET</span><b id="target">UNSELECTED</b></div><button id="scan">SCAN NEAREST</button></section>
+<section class="panel" id="bottom"><b> MULTIVERSE FLIGHT CONTROL </b><div class="muted">Explore a procedurally generated universe. Discover worlds, fly between star systems, and chart the unknown.</div></section>
+</div>
+<script>
+(()=>{
+const c=document.querySelector('#space'),ctx=c.getContext('2d'),map=document.querySelector('#map'),mx=map.getContext('2d');
+let W,H,dpr,zoom=1,cam={x:0,y:0},ship={x:0,y:0,a:-Math.PI/2,vx:0,vy:0},keys={},auto=false,thrust=0,found=new Set(JSON.parse(localStorage.getItem('mv-found')||'[]')),target=null;
+const rnd=(n)=>{let x=Math.sin(n*127.1+311.7)*43758.5453;return x-Math.floor(x)};
+let stars=Array.from({length:260},(_,i)=>({x:(rnd(i+1)-.5)*7000,y:(rnd(i+91)-.5)*7000,r:.4+rnd(i+8)*1.4}));
+let planets=[];for(let g=0;g<12;g++){let gx=(rnd(g+700)-.5)*4400,gy=(rnd(g+900)-.5)*4400;for(let p=0;p<80;p++){let id=g*80+p,ang=rnd(id+100)*Math.PI*2,dist=120+rnd(id+300)*700;planets.push({id,g,x:gx+Math.cos(ang)*dist,y:gy+Math.sin(ang)*dist,r:5+rnd(id+500)*13,h:Math.floor(rnd(id+800)*360),name:['Aster','Nix','Vela','Orion','Mira','Kepler','Nova','Cinder'][id%8]+'-'+String(p+1).padStart(2,'0')})}}
+function resize(){dpr=Math.min(devicePixelRatio||1,2);W=innerWidth;H=innerHeight;c.width=W*dpr;c.height=H*dpr;ctx.setTransform(dpr,0,0,dpr,0,0)}addEventListener('resize',resize);resize();
+function screen(x,y){return [(x-cam.x)*zoom+W/2,(y-cam.y)*zoom+H/2]}
+function drawShip(){let [x,y]=screen(ship.x,ship.y);ctx.save();ctx.translate(x,y);ctx.rotate(ship.a+Math.PI/2);ctx.shadowBlur=18;ctx.shadowColor='#59dcff';ctx.fillStyle='#a8efff';ctx.strokeStyle='#e3fbff';ctx.lineWidth=1.5;
+ctx.beginPath();ctx.moveTo(0,-22);ctx.lineTo(8,5);ctx.lineTo(24,15);ctx.lineTo(22,20);ctx.lineTo(5,14);ctx.lineTo(4,23);ctx.lineTo(-4,23);ctx.lineTo(-5,14);ctx.lineTo(-22,20);ctx.lineTo(-24,15);ctx.lineTo(-8,5);ctx.closePath();ctx.fill();ctx.stroke();
+ctx.fillStyle='#12617d';ctx.beginPath();ctx.ellipse(0,-5,4,9,0,0,Math.PI*2);ctx.fill();
+ctx.fillStyle='#ffbd65';if(thrust>.1){ctx.beginPath();ctx.moveTo(-5,18);ctx.lineTo(0,30+Math.random()*9);ctx.lineTo(5,18);ctx.fill()}ctx.restore()}
+function frame(){ctx.clearRect(0,0,W,H);ctx.fillStyle='#020711';ctx.fillRect(0,0,W,H);
+for(const s of stars){let [x,y]=screen(s.x,s.y);if(x>-5&&x<W+5&&y>-5&&y<H+5){ctx.fillStyle='#b7d8e8';ctx.globalAlpha=.35+rnd(Math.floor(s.x))*0.6;ctx.fillRect(x,y,s.r,s.r)}}ctx.globalAlpha=1;
+for(const p of planets){let [x,y]=screen(p.x,p.y),r=p.r*zoom;if(x<-40||x>W+40||y<-40||y>H+40||r<.7)continue;ctx.fillStyle='hsl('+p.h+' 65% 58%)';ctx.shadowBlur=Math.min(22,r*1.4);ctx.shadowColor=ctx.fillStyle;ctx.beginPath();ctx.arc(x,y,Math.max(1,r),0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;if(r>10){ctx.fillStyle='#ffffff99';ctx.font='10px system-ui';ctx.fillText(p.name,x+r+4,y+3)}if(found.has(p.id)){ctx.strokeStyle='#83ffc1';ctx.beginPath();ctx.arc(x,y,r+4,0,Math.PI*2);ctx.stroke()}}
+if(target){let [x,y]=screen(target.x,target.y);ctx.strokeStyle='#83ffc1';ctx.setLineDash([5,5]);ctx.beginPath();ctx.arc(x,y,24,0,Math.PI*2);ctx.stroke();ctx.setLineDash([])}
+drawShip();updateMap();requestAnimationFrame(frame)}
+function updateMap(){mx.clearRect(0,0,380,250);mx.fillStyle='#020812';mx.fillRect(0,0,380,250);for(let p of planets){let x=(p.x+2600)/5200*380,y=(p.y+2600)/5200*250;mx.fillStyle=found.has(p.id)?'#83ffc1':'hsl('+p.h+' 65% 60%)';mx.fillRect(x,y,2,2)}let sx=(ship.x+2600)/5200*380,sy=(ship.y+2600)/5200*250;mx.fillStyle='#fff';mx.beginPath();mx.arc(sx,sy,4,0,7);mx.fill()}
+function tick(){if(keys.ArrowLeft||keys.a)ship.a-=.055;if(keys.ArrowRight||keys.d)ship.a+=.055;thrust=(keys.ArrowUp||keys.w?0.22:0)+(keys[' ']?.5:0);if(auto&&target){let desired=Math.atan2(target.y-ship.y,target.x-ship.x);let delta=Math.atan2(Math.sin(desired-ship.a),Math.cos(desired-ship.a));ship.a+=Math.max(-.025,Math.min(.025,delta));thrust=.18}
+ship.vx+=Math.cos(ship.a)*thrust;ship.vy+=Math.sin(ship.a)*thrust;ship.vx*=.992;ship.vy*=.992;ship.x+=ship.vx;ship.y+=ship.vy;cam.x+=(ship.x-cam.x)*.08;cam.y+=(ship.y-cam.y)*.08;
+let near=null,nd=Infinity;for(let p of planets){let d=Math.hypot(p.x-ship.x,p.y-ship.y);if(d<nd){nd=d;near=p}if(d<p.r+18&&!found.has(p.id)){found.add(p.id);localStorage.setItem('mv-found',JSON.stringify([...found]));document.querySelector('#found').textContent=found.size+' / 960'}}
+document.querySelector('#speed').textContent=Math.hypot(ship.vx,ship.vy).toFixed(1);document.querySelector('#alt').textContent=Math.round(Math.hypot(ship.x,ship.y)).toLocaleString();document.querySelector('#heading').textContent=String(Math.round((ship.a*180/Math.PI+360)%360)).padStart(3,'0')+'°';document.querySelector('#throttle').textContent=Math.round(thrust*100)+'%';document.querySelector('#found').textContent=found.size+' / 960';requestAnimationFrame(tick)}
+addEventListener('keydown',e=>{keys[e.key.toLowerCase()]=true;if([' ','ArrowUp','ArrowLeft','ArrowRight'].includes(e.key))e.preventDefault();if(e.key.toLowerCase()==='m')toggleAuto()});addEventListener('keyup',e=>keys[e.key.toLowerCase()]=false);
+function toggleAuto(){auto=!auto;document.querySelector('#auto').textContent='AUTOPILOT: '+(auto?'ON':'OFF')}document.querySelector('#auto').onclick=toggleAuto;
+document.querySelector('#zoomIn').onclick=()=>zoom=Math.min(3,zoom*1.25);document.querySelector('#zoomOut').onclick=()=>zoom=Math.max(.12,zoom/1.25);document.querySelector('#reset').onclick=()=>{zoom=1;cam={x:ship.x,y:ship.y}};
+document.querySelector('#scan').onclick=()=>{let best=null,dist=Infinity;for(let p of planets){let d=Math.hypot(p.x-ship.x,p.y-ship.y);if(d<dist&&!found.has(p.id)){dist=d;best=p}}target=best;if(best){document.querySelector('#target').textContent=best.name;auto=true;document.querySelector('#auto').textContent='AUTOPILOT: ON'}};
+c.addEventListener('wheel',e=>{zoom=Math.max(.12,Math.min(3,zoom*(e.deltaY<0?1.12:.89)))},{passive:true});
+document.querySelector('#found').textContent=found.size+' / 960';frame();tick();
+})();
+</script></body></html>
