@@ -23,7 +23,7 @@ button{background:#102a3a;color:#dffaff;border:1px solid #4b9dbb;border-radius:7
 <div class="readout"><span>VELOCITY</span><b id="speed">0.0</b></div><div class="readout"><span>ALTITUDE</span><b id="alt">0</b></div><div class="readout"><span>HEADING</span><b id="heading">000°</b></div><div class="readout"><span>THROTTLE</span><b id="throttle">0%</b></div>
 <p class="muted">W / ↑ thrust · A,D / ←,→ steer<br>Space = boost · M = autopilot</p>
 <button id="auto">AUTOPILOT: OFF</button><button id="speedMode" aria-pressed="false">DRIVE LIMIT: ON</button><button id="zoomIn">ZOOM +</button><button id="zoomOut">ZOOM −</button><button id="reset">RESET VIEW</button></section>
-<section class="panel" id="right"><h1>SECTOR SCANNER</h1><canvas id="map" width="380" height="250"></canvas><p class="muted">12 galaxies · 960 worlds</p><div class="readout"><span>DISCOVERED</span><b id="found">0 / 960</b></div><div class="readout"><span>NAV TARGET</span><b id="target">UNSELECTED</b></div><button id="scan">SCAN NEAREST</button></section>
+<section class="panel" id="right"><h1>SECTOR SCANNER</h1><canvas id="map" width="380" height="250"></canvas><p class="muted">12 galaxies · 960 worlds<br>Planet imagery: NASA Image and Video Library</p><div class="readout"><span>DISCOVERED</span><b id="found">0 / 960</b></div><div class="readout"><span>NAV TARGET</span><b id="target">UNSELECTED</b></div><button id="scan">SCAN NEAREST</button></section>
 <section class="panel" id="bottom"><b> MULTIVERSE FLIGHT CONTROL </b><div class="muted">Explore a procedurally generated universe. Discover worlds, fly between star systems, and chart the unknown.</div></section>
 </div>
 <script>
@@ -32,7 +32,26 @@ const c=document.querySelector('#space'),ctx=c.getContext('2d'),map=document.que
 let W,H,dpr,zoom=1,cam={x:0,y:0},ship={x:0,y:0,a:-Math.PI/2,vx:0,vy:0},keys={},auto=false,unlimited=false,thrust=0,found=new Set(JSON.parse(localStorage.getItem('mv-found')||'[]')),target=null;
 const rnd=(n)=>{let x=Math.sin(n*127.1+311.7)*43758.5453;return x-Math.floor(x)};
 let stars=Array.from({length:260},(_,i)=>({x:(rnd(i+1)-.5)*7000,y:(rnd(i+91)-.5)*7000,r:.4+rnd(i+8)*1.4}));
-let planets=[];for(let g=0;g<12;g++){let gx=(rnd(g+700)-.5)*4400,gy=(rnd(g+900)-.5)*4400;for(let p=0;p<80;p++){let id=g*80+p,ang=rnd(id+100)*Math.PI*2,dist=120+rnd(id+300)*700;planets.push({id,g,x:gx+Math.cos(ang)*dist,y:gy+Math.sin(ang)*dist,r:5+rnd(id+500)*13,h:Math.floor(rnd(id+800)*360),name:['Aster','Nix','Vela','Orion','Mira','Kepler','Nova','Cinder'][id%8]+'-'+String(p+1).padStart(2,'0')})}}
+let planets=[];for(let g=0;g<12;g++){let gx=(rnd(g+700)-.5)*4400,gy=(rnd(g+900)-.5)*4400;for(let p=0;p<80;p++){let id=g*80+p,ang=rnd(id+100)*Math.PI*2,dist=120+rnd(id+300)*700;planets.push({id,g,x:gx+Math.cos(ang)*dist,y:gy+Math.sin(ang)*dist,r:5+rnd(id+500)*13,h:Math.floor(rnd(id+800)*360),name:['Aster','Nix','Vela','Orion','Mira','Kepler','Nova','Cinder'][id%8]+'-'+String(p+1).padStart(2,'0'),body:id%8})}}
+const nasaBodies=['Mercury','Venus','Earth','Mars','Jupiter','Saturn','Uranus','Neptune'];
+const nasaTextures=Array(8).fill(null);
+async function loadNasaTextures(){
+  await Promise.all(nasaBodies.map(async(name,i)=>{
+    try{
+      const q=encodeURIComponent(name+' planet full disk');
+      const response=await fetch('https://images-api.nasa.gov/search?q='+q+'&media_type=image&page_size=8');
+      if(!response.ok)return;
+      const data=await response.json();
+      const items=(data.collection&&data.collection.items)||[];
+      const item=items.find(v=>v.links&&v.links.some(l=>l.rel==='preview'&&/\\.(jpg|jpeg|png)(\\?|$)/i.test(l.href)));
+      if(!item)return;
+      const link=item.links.find(l=>l.rel==='preview');
+      const img=new Image();img.crossOrigin='anonymous';img.onload=()=>{nasaTextures[i]=img};img.src=link.href;
+    }catch(err){console.warn('NASA texture unavailable for '+name,err)}
+  }));
+}
+loadNasaTextures();
+
 function resize(){dpr=Math.min(devicePixelRatio||1,2);W=innerWidth;H=innerHeight;c.width=W*dpr;c.height=H*dpr;ctx.setTransform(dpr,0,0,dpr,0,0)}addEventListener('resize',resize);resize();
 function screen(x,y){return [(x-cam.x)*zoom+W/2,(y-cam.y)*zoom+H/2]}
 function drawShip(){let [x,y]=screen(ship.x,ship.y);ctx.save();ctx.translate(x,y);ctx.rotate(ship.a+Math.PI/2);ctx.scale(zoom*0.18,zoom*0.18);ctx.shadowBlur=18;ctx.shadowColor='#59dcff';ctx.fillStyle='#a8efff';ctx.strokeStyle='#e3fbff';ctx.lineWidth=1.5;
@@ -41,7 +60,7 @@ ctx.fillStyle='#12617d';ctx.beginPath();ctx.ellipse(0,-5,4,9,0,0,Math.PI*2);ctx.
 ctx.fillStyle='#ffbd65';if(thrust>.1){ctx.beginPath();ctx.moveTo(-5,18);ctx.lineTo(0,30+Math.random()*9);ctx.lineTo(5,18);ctx.fill()}ctx.restore()}
 function frame(){ctx.clearRect(0,0,W,H);ctx.fillStyle='#020711';ctx.fillRect(0,0,W,H);
 for(const s of stars){let [x,y]=screen(s.x,s.y);if(x>-5&&x<W+5&&y>-5&&y<H+5){ctx.fillStyle='#b7d8e8';ctx.globalAlpha=.35+rnd(Math.floor(s.x))*0.6;ctx.fillRect(x,y,s.r,s.r)}}ctx.globalAlpha=1;
-for(const p of planets){let [x,y]=screen(p.x,p.y),r=p.r*zoom;if(x<-40||x>W+40||y<-40||y>H+40||r<.7)continue;ctx.fillStyle='hsl('+p.h+' 65% 58%)';ctx.shadowBlur=Math.min(22,r*1.4);ctx.shadowColor=ctx.fillStyle;ctx.beginPath();ctx.arc(x,y,Math.max(1,r),0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;if(r>10){ctx.fillStyle='#ffffff99';ctx.font='10px system-ui';ctx.fillText(p.name,x+r+4,y+3)}if(found.has(p.id)){ctx.strokeStyle='#83ffc1';ctx.beginPath();ctx.arc(x,y,r+4,0,Math.PI*2);ctx.stroke()}}
+for(const p of planets){let [x,y]=screen(p.x,p.y),r=p.r*zoom;if(x<-40||x>W+40||y<-40||y>H+40||r<.7)continue;const tex=nasaTextures[p.body];ctx.save();ctx.beginPath();ctx.arc(x,y,Math.max(1,r),0,Math.PI*2);ctx.clip();if(tex){ctx.drawImage(tex,x-r,y-r,2*r,2*r);ctx.fillStyle='rgba(0,8,22,.20)';ctx.fillRect(x-r,y-r,2*r,2*r)}else{ctx.fillStyle='hsl('+p.h+' 65% 58%)';ctx.fillRect(x-r,y-r,2*r,2*r)}ctx.restore();ctx.shadowBlur=0;if(r>10){ctx.fillStyle='#ffffff99';ctx.font='10px system-ui';ctx.fillText(p.name,x+r+4,y+3)}if(found.has(p.id)){ctx.strokeStyle='#83ffc1';ctx.beginPath();ctx.arc(x,y,r+4,0,Math.PI*2);ctx.stroke()}}
 if(target){let [x,y]=screen(target.x,target.y);ctx.strokeStyle='#83ffc1';ctx.setLineDash([5,5]);ctx.beginPath();ctx.arc(x,y,24,0,Math.PI*2);ctx.stroke();ctx.setLineDash([])}
 drawShip();updateMap();requestAnimationFrame(frame)}
 function updateMap(){mx.clearRect(0,0,380,250);mx.fillStyle='#020812';mx.fillRect(0,0,380,250);for(let p of planets){let x=(p.x+2600)/5200*380,y=(p.y+2600)/5200*250;mx.fillStyle=found.has(p.id)?'#83ffc1':'hsl('+p.h+' 65% 60%)';mx.fillRect(x,y,2,2)}let sx=(ship.x+2600)/5200*380,sy=(ship.y+2600)/5200*250;mx.fillStyle='#fff';mx.beginPath();mx.arc(sx,sy,4,0,7);mx.fill()}
