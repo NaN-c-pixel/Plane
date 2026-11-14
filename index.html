@@ -35,7 +35,7 @@ let stars=Array.from({length:260},(_,i)=>({x:(rnd(i+1)-.5)*7000,y:(rnd(i+91)-.5)
 let planets=[];for(let g=0;g<12;g++){let gx=(rnd(g+700)-.5)*4400,gy=(rnd(g+900)-.5)*4400;for(let p=0;p<80;p++){let id=g*80+p,ang=rnd(id+100)*Math.PI*2,dist=120+rnd(id+300)*700;planets.push({id,g,x:gx+Math.cos(ang)*dist,y:gy+Math.sin(ang)*dist,r:5+rnd(id+500)*13,h:Math.floor(rnd(id+800)*360),name:['Aster','Nix','Vela','Orion','Mira','Kepler','Nova','Cinder'][id%8]+'-'+String(p+1).padStart(2,'0')})}}
 function resize(){dpr=Math.min(devicePixelRatio||1,2);W=innerWidth;H=innerHeight;c.width=W*dpr;c.height=H*dpr;ctx.setTransform(dpr,0,0,dpr,0,0)}addEventListener('resize',resize);resize();
 function screen(x,y){return [(x-cam.x)*zoom+W/2,(y-cam.y)*zoom+H/2]}
-function drawShip(){let [x,y]=screen(ship.x,ship.y);ctx.save();ctx.translate(x,y);ctx.rotate(ship.a+Math.PI/2);ctx.scale(zoom,zoom);ctx.shadowBlur=18;ctx.shadowColor='#59dcff';ctx.fillStyle='#a8efff';ctx.strokeStyle='#e3fbff';ctx.lineWidth=1.5;
+function drawShip(){let [x,y]=screen(ship.x,ship.y);ctx.save();ctx.translate(x,y);ctx.rotate(ship.a+Math.PI/2);ctx.scale(zoom*0.18,zoom*0.18);ctx.shadowBlur=18;ctx.shadowColor='#59dcff';ctx.fillStyle='#a8efff';ctx.strokeStyle='#e3fbff';ctx.lineWidth=1.5;
 ctx.beginPath();ctx.moveTo(0,-22);ctx.lineTo(8,5);ctx.lineTo(24,15);ctx.lineTo(22,20);ctx.lineTo(5,14);ctx.lineTo(4,23);ctx.lineTo(-4,23);ctx.lineTo(-5,14);ctx.lineTo(-22,20);ctx.lineTo(-24,15);ctx.lineTo(-8,5);ctx.closePath();ctx.fill();ctx.stroke();
 ctx.fillStyle='#12617d';ctx.beginPath();ctx.ellipse(0,-5,4,9,0,0,Math.PI*2);ctx.fill();
 ctx.fillStyle='#ffbd65';if(thrust>.1){ctx.beginPath();ctx.moveTo(-5,18);ctx.lineTo(0,30+Math.random()*9);ctx.lineTo(5,18);ctx.fill()}ctx.restore()}
